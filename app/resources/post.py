@@ -1,6 +1,7 @@
 import random
 import json
 import requests
+import sys
 
 from flask import current_app, url_for, abort
 from flask.ext.restful import Resource, reqparse, fields, marshal, inputs, marshal_with
@@ -34,6 +35,7 @@ class Bot(object):
     def respond(self, text=None, **kwargs):
         """ Send a response back to the app
         """
+        # Make a thing to post
         if text is None:
             text = 'Hello {0.user_name}, how can I help?'
         content = {
@@ -43,8 +45,15 @@ class Bot(object):
         }
         if kwargs:
             content.update(kwargs)
-        print ' -- ' + content['text']
-#         requests.post('https://slack.com/api/chat.postMessage', data=content)
+
+        # Post to slack
+        response = requests.post(
+            'https://slack.com/api/chat.postMessage', 
+            data=content)
+
+        # Log if we're getting errors
+        if not response.ok:
+            print response.text
 
     def chat(self):
         """ Parse the text requests and post responses
@@ -66,8 +75,8 @@ class Bot(object):
         try:
             if tokens[-2] == 'on':
                 # Pop off last two tokens cause we don't care about these
-                self.endpoint = tokens.pop()
-                _ = tokens.pop()
+                self.endpoint = tokens[-1]
+                tokens = tokens[:-2]
             else:
                 # Use data.gov.au as default endpoint
                 self.endpoint = self.default_endpoint
@@ -103,6 +112,24 @@ class Bot(object):
         ]
         self.respond("Thanks @{{0.user_name}}. {0}".format(random.choice(response)))
 
+    def send_file_info(self, result):
+        """ Print info about a single file result from the api
+        """
+        template = u"{1} (it's a {0} file). Get it here: {2}"
+
+        try:
+            # Get info from result
+            description = result['resources'][0]['description'].split('.')[0]
+            if description in ('', None):
+                description = "There's no description for this file"
+            link = result['resources'][0]['url']
+            fmt = result['resources'][0]['format']
+
+            # Post message
+            self.respond(template.format(fmt, description, link))
+        except IndexError:
+            self.respond("Hmm, I've found a resource here but can't parse it. Moving on...")
+
     
     def query(self, tokens):
         """ Run a query
@@ -112,54 +139,49 @@ class Bot(object):
         # Run the query
         query = '+'.join(tokens)
         data = {'q': query, 'rows': 10}
-        response = requests.get(self.endpoint + '/package_search', data=query)
+        query_response = requests.get(
+            self.endpoint + '/package_search', params=data)
         
         # Respond with a few answers
-        if response.ok:
-            results = response.json()
+        if query_response.ok:
+            results = query_response.json()
             count = results['result']['count']
             self.respond(("I found {0} results "
                          "for {1} at {{0.short_endpoint}}, "
-                         "here's the top ten:").format(count, query))
-            for result in results['result']['results']:
-                template = "{1} (it's a {0} file). Get it here: {2}"
-                description = result['resources'][0]['description'].split('.')[0]
-                link = result['resources'][0]['url']
-                fmt = result['resources'][0]['format']
-                self.respond(template.format(fmt, description, link))
+                         "here's the top five:").format(count, query))
+            for result in results['result']['results'][:5]:
+                self.send_file_info(result)
+                
+            self.respond(
+                ("Want more? Check out https://data.gov.au/dataset?q={0}"
+                 "&sort=extras_harvest_portal+asc%2C+score+desc").format(query))
         else:
             self.respond("Looks like something's borked at "
                          "{0.short_endpoint}, you're on your own!")
-    
+
     def random(self):
         """ Return a random dataset
         """
-#         self.first_response()
         self.respond("I can't let you do that @{0.user_name}.")
 
     def changed(self):
         """ Return the datasets which have changed recently
         """
-        response = requests.get(
+        changed_response = requests.get(
             self.endpoint + '/recently_changed_packages_activity_list')
         
         # Respond with a few answers
-        if response.ok:
-            results = response.json()
+        if changed_response.ok:
+            results = changed_response.json()
             count = results['result']['count']
             self.respond(("I found {0} results "
                          "which have recently changed at {{0.short_endpoint}}, "
                          "here's the top ten:").format(count, query))
             for result in results['result']['results']:
-                template = "{1} (it's a {0} file). Get it here: {2}"
-                description = result['resources'][0]['description'].split('.')[0]
-                link = result['resources'][0]['url']
-                fmt = result['resources'][0]['format']
-                self.respond(template.format(fmt, description, link))
+                self.send_file_info(result)
         else:
             self.respond("Looks like something's borked at "
                          "{0.short_endpoint}, you're on your own!")
-
 
 
 class PostAPI(Resource):
@@ -181,4 +203,19 @@ class PostAPI(Resource):
         return {'message': 'Databot says "Hello, World!"'}
 
     def post(self):
-        post = Bot(**self.reqparse.parse_args()).chat()
+        args = self.reqparse.parse_args()
+        # try:
+        post = Bot(**args).chat()
+        # except:
+        #     err = sys.exc_info()[0]
+        #     content = {
+        #         'token': 'xoxb-8725697458-96LgtIBgQldEvWG8KF0ihv2b',
+        #         'text': ("Oh no, databot is sick (got a {0})! "
+        #                  "Better tell @jess").format(err),
+        #         'channel': args['channel_id']
+        #     }
+
+        #     # Post to slack
+        #     response = requests.post(
+        #         'https://slack.com/api/chat.postMessage', 
+        #         data=content)
