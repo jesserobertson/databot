@@ -24,7 +24,7 @@ def create_app(config_name):
     api = Api(api_blueprint)
 
     # Resources
-    api.add_resource(PostAPI, '/')
+    api.add_resource(BotAPI, '/')
     app.register_blueprint(api_blueprint)
 
     return app
