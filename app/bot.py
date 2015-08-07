@@ -129,9 +129,11 @@ class Bot(object):
                              "for {1} at {{0.short_endpoint}}, "
                              "here's the top result:\n").format(count, query))
                 self.send_file_info(results['result']['results'][0])
+                more_link = (
+                    "http://{{0.short_endpoint}}/dataset?q={0}"
+                    "&sort=extras_harvest_portal+asc%2C+score+desc").format(query)
                 self.respond(
-                    ("\nWant more? Check out <'https://{{0.short_endpoint}}/dataset?q={0}"
-                     "&sort=extras_harvest_portal+asc%2C+score+desc'|this link>.").format(query))
+                    ("\nWant more? Check out <{0}|this link>.".format(more_link)))
             else:
                 self.respond(("Sorry, I couldn't find anything"
                               " on '{0}' at {{0.short_endpoint}}.").format('+'.join(tokens)))
