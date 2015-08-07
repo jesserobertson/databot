@@ -124,13 +124,17 @@ class Bot(object):
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
-            self.respond(("I found {0} results "
-                         "for {1} at {{0.short_endpoint}}, "
-                         "here's the top result:\n").format(count, query))
-            self.send_file_info(results['result']['results'][0])
-            self.respond(
-                ("\nWant more? Check out <https://{{0.short_endpoint}}/dataset?q={0}"
-                 "&sort=extras_harvest_portal+asc%2C+score+desc|this link>.").format(query))
+            if count > 0:
+                self.respond(("I found {0} results "
+                             "for {1} at {{0.short_endpoint}}, "
+                             "here's the top result:\n").format(count, query))
+                self.send_file_info(results['result']['results'][0])
+                self.respond(
+                    ("\nWant more? Check out <'https://{{0.short_endpoint}}/dataset?q={0}"
+                     "&sort=extras_harvest_portal+asc%2C+score+desc'|this link>.").format(query))
+            else:
+                self.respond(("Sorry, I couldn't find anything"
+                              " on '{0}' at {{0.short_endpoint}}.").format('+'.join(tokens)))
         else:
             self.respond("\nLooks like something's borked at "
                          "{0.short_endpoint}, you're on your own!")
