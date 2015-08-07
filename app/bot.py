@@ -31,36 +31,14 @@ class Bot(object):
         super(Bot, self).__init__()
         for arg, value in kwargs.items():
             setattr(self, arg, value)
-    
-    def respond(self, text=None, **kwargs):
-        """ Send a response back to the app
-        """
-        # Make a thing to post
-        if text is None:
-            text = 'Hello {0.user_name}, how can I help?'
-        content = {
-            'token': 'xoxb-8725697458-96LgtIBgQldEvWG8KF0ihv2b',
-            'text': text.format(self),
-            'channel': self.channel_id,
-            'as_user': 'true',
-            'username': 'databot'
+
+        # Set up response
+        self.response = {
+            'text': ''
         }
-        if kwargs:
-            content.update(kwargs)
 
-        # Post to slack
-        response = requests.post(
-            'https://slack.com/api/chat.postMessage', 
-            data=content)
-
-        # Log if we're getting errors
-        if not response.ok:
-            print response.text
-
-    def chat(self):
-        """ Parse the text requests and post responses
-        """
-        # Strip text of @databot[:]
+        ## Run chat
+        # Strip text of first token which is always 'databot'
         try:
             tokens = self.text.split()[1:]
             first = tokens.pop(0)
@@ -101,6 +79,11 @@ class Bot(object):
 
         # Glom everything else into a query
         return self.query(tokens)
+    
+    def respond(self, text):
+        """ Send a response back to the app
+        """
+        self.response['text'] += text
 
     def first_response(self):
         """ Post an acknowledgement that you've got something
@@ -112,12 +95,12 @@ class Bot(object):
             "Would your grandmother be happy reading that?",
             "I'm just logging your query with ASIO."
         ]
-        self.respond("Thanks @{{0.user_name}}. {0}".format(random.choice(response)))
+        self.respond("Thanks @{{0.user_name}}. {0}\n".format(random.choice(response)))
 
     def send_file_info(self, result):
         """ Print info about a single file result from the api
         """
-        template = u"{1} (it's a {0} file). Get it here: {2}"
+        template = u"{1} (it's {0}). Get it <{2}|here>."
 
         try:
             # Get info from result
@@ -126,13 +109,16 @@ class Bot(object):
                 description = "There's no description for this file"
             link = result['resources'][0]['url']
             fmt = result['resources'][0]['format']
+            if fmt in ('', None):
+                fmt = 'in an unknown format'
+            else:
+                fmt = 'in ' + fmt + 'format'
 
             # Post message
             self.respond(template.format(fmt, description, link))
         except IndexError:
             self.respond("Hmm, I've found a resource here but can't parse it. Moving on...")
 
-    
     def query(self, tokens):
         """ Run a query
         """
@@ -148,17 +134,15 @@ class Bot(object):
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
-            self.respond(("I found {0} results "
+            self.respond(("\nI found {0} results "
                          "for {1} at {{0.short_endpoint}}, "
-                         "here's the top five:").format(count, query))
-            for result in results['result']['results'][:5]:
-                self.send_file_info(result)
-                
+                         "here's the top result:\n").format(count, query))
+            self.send_file_info(results['result']['results'][0])
             self.respond(
-                ("Want more? Check out https://data.gov.au/dataset?q={0}"
-                 "&sort=extras_harvest_portal+asc%2C+score+desc").format(query))
+                ("\nWant more? Check out <https://data.gov.au/dataset?q={0}"
+                 "&sort=extras_harvest_portal+asc%2C+score+desc|this link>.").format(query))
         else:
-            self.respond("Looks like something's borked at "
+            self.respond("\nLooks like something's borked at "
                          "{0.short_endpoint}, you're on your own!")
 
     def random(self):
@@ -206,8 +190,7 @@ class BotAPI(Resource):
 
     def post(self):
         args = self.reqparse.parse_args()
-        # try:
-        post = Bot(**args).chat()
+        return Bot(**args).response
         
         # except:
         #     err = sys.exc_info()[0]

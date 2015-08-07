@@ -8,7 +8,7 @@ from flask import Flask, Blueprint
 from flask.ext.restful import Api, Resource, url_for
 
 from .config import config
-from .resources.post import PostAPI
+from .bot import BotAPI
 
 
 def create_app(config_name):
