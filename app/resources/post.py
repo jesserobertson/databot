@@ -41,7 +41,9 @@ class Bot(object):
         content = {
             'token': 'xoxb-8725697458-96LgtIBgQldEvWG8KF0ihv2b',
             'text': text.format(self),
-            'channel': self.channel_id
+            'channel': self.channel_id,
+            'as_user': True,
+            'username': 'Data Bot'
         }
         if kwargs:
             content.update(kwargs)
@@ -204,6 +206,10 @@ class PostAPI(Resource):
 
     def post(self):
         args = self.reqparse.parse_args()
+        return {
+            'text': 'Hello @{0}'.format(args['user_name'])
+	}
+
         # try:
         post = Bot(**args).chat()
         # except:
