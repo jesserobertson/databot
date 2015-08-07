@@ -4,7 +4,7 @@ CKAN integration for slack
 
 ### What does it do?
 
-Searches an arbitrary CKAN instance from slack for data. You just asl `databot find <x>` and databot does the rest.
+Searches an arbitrary CKAN instance from slack for data. You just ask `databot find <x>` and databot does the rest.
 
 ![Databot scrot](https://raw.githubusercontent.com/jesserobertson/databot/master/databotscrot.png "Databot scrot")
 
