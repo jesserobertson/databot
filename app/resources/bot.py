@@ -41,7 +41,9 @@ class Bot(object):
         content = {
             'token': 'xoxb-8725697458-96LgtIBgQldEvWG8KF0ihv2b',
             'text': text.format(self),
-            'channel': self.channel_id
+            'channel': self.channel_id,
+            'as_user': 'true',
+            'username': 'databot'
         }
         if kwargs:
             content.update(kwargs)
@@ -184,7 +186,7 @@ class Bot(object):
                          "{0.short_endpoint}, you're on your own!")
 
 
-class PostAPI(Resource):
+class BotAPI(Resource):
 
     slack_data = ('token', 'team_id', 'team_domain', 'channel_id',
                   'channel_name', 'timestamp', 'user_id', 'user_name',
@@ -197,7 +199,7 @@ class PostAPI(Resource):
             self.reqparse.add_argument(arg, type=str, default=None)
 
         # Initialize the resource
-        super(PostAPI, self).__init__()
+        super(BotAPI, self).__init__()
 
     def get(self):
         return {'message': 'Databot says "Hello, World!"'}
@@ -206,6 +208,7 @@ class PostAPI(Resource):
         args = self.reqparse.parse_args()
         # try:
         post = Bot(**args).chat()
+        
         # except:
         #     err = sys.exc_info()[0]
         #     content = {
