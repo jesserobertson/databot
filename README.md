@@ -2,6 +2,14 @@
 
 CKAN integration for slack
 
+### What does it do?
+
+Searches an arbitrary CKAN instance from slack for data. You just asl `databot find <x>` and databot does the rest.
+
+![Databot scrot](https://raw.githubusercontent.com/jesserobertson/databot/master/databotscrot.png "Databot scrot")
+
+You can specify any CKAN endpoint with v3 of the CKAN API using on, so `databot search cycling on data.gov.uk` will search the data.gov.uk CKAN instance for cycling. Our default is `data.gov.au` because Australia needs to be first in *something* after [our terrible Ashes performance this year](http://www.abc.net.au/news/2015-08-07/michael-clarke-rues-one-of-his-toughest-days/6679346?section=sport).
+
 ### How do I run it?
 
 To run, you'll need Python 2, and pip
