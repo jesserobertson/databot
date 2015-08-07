@@ -49,6 +49,8 @@ class Bot(object):
         if first != 'find':
             return self.respond(
                 "Sorry @{0.user_name}, I didn't understand that")
+        else:
+            self.respond('Thanks @{0.user_name}. ')
 
         # if second last token is 'on', then we want to search on 
         # a particular portal
@@ -83,25 +85,11 @@ class Bot(object):
     def respond(self, text):
         """ Send a response back to the app
         """
-        self.response['text'] += text
-
-    def first_response(self):
-        """ Post an acknowledgement that you've got something
-        """
-        response = [
-            "I'm just looking that up in the Pokedex.",
-            "I'll just have to whip the interns some more...",
-            "Are you sure that's a good idea?",
-            "Would your grandmother be happy reading that?",
-            "I'm just logging your query with ASIO."
-        ]
-        self.respond("Thanks @{{0.user_name}}. {0}\n".format(random.choice(response)))
+        self.response['text'] += text.format(self)
 
     def send_file_info(self, result):
         """ Print info about a single file result from the api
         """
-        template = u"{1} (it's {0}). Get it <{2}|here>."
-
         try:
             # Get info from result
             description = result['resources'][0]['description'].split('.')[0]
@@ -112,18 +100,20 @@ class Bot(object):
             if fmt in ('', None):
                 fmt = 'in an unknown format'
             else:
-                fmt = 'in ' + fmt + 'format'
+                if any(fmt.startswith(v) for v in 'aeiou'):
+                    fmt = 'an ' + fmt + ' file'
+                else:
+                    fmt = 'a ' + fmt + ' file'
 
             # Post message
+            template = u"{1} (it's {0}). Get it <{2}|here>."
             self.respond(template.format(fmt, description, link))
         except IndexError:
             self.respond("Hmm, I've found a resource here but can't parse it. Moving on...")
 
     def query(self, tokens):
         """ Run a query
-        """
-        self.first_response()
-        
+        """        
         # Run the query
         query = '+'.join(tokens)
         data = {'q': query, 'rows': 10}
@@ -134,12 +124,12 @@ class Bot(object):
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
-            self.respond(("\nI found {0} results "
+            self.respond(("I found {0} results "
                          "for {1} at {{0.short_endpoint}}, "
                          "here's the top result:\n").format(count, query))
             self.send_file_info(results['result']['results'][0])
             self.respond(
-                ("\nWant more? Check out <https://data.gov.au/dataset?q={0}"
+                ("\nWant more? Check out <https://{{0.short_endpoint}}/dataset?q={0}"
                  "&sort=extras_harvest_portal+asc%2C+score+desc|this link>.").format(query))
         else:
             self.respond("\nLooks like something's borked at "
