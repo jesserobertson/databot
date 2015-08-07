@@ -2,6 +2,7 @@ import random
 import json
 import requests
 import sys
+import re
 
 from flask import current_app, url_for, abort
 from flask.ext.restful import Resource, reqparse, fields, marshal, inputs, marshal_with
@@ -18,6 +19,22 @@ post_fields = {
     'text': fields.String,
     'trigger_word': fields.String
 }
+
+
+def replace_slack_links(string):
+    """ Strips the http requests that slack sticks in strings
+    """
+    find_pattern = re.compile('(?<=\|)[.\w]*')
+    replace_pattern = re.compile('<.*>')
+
+    # Look for the match first
+    match = replace_pattern.search(string)
+    if match is not None:
+        subsstr = find_pattern.search(string).group(0)
+        return re.sub('<.*>', subsstr, string)
+    else:
+        return string
+
 
 class Bot(object):
     
@@ -38,6 +55,11 @@ class Bot(object):
         }
 
         ## Run chat
+        # We need to replace links in slack with the default values, if given
+        # since slack does data.gov.au -> <http://data.gov.au|data.gov.au>
+        # so we regexp it and replace
+        self.text = replace_slack_links(self.text)
+
         # Strip text of first token which is always 'databot'
         try:
             tokens = self.text.split()[1:]
