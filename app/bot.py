@@ -40,7 +40,7 @@ class Bot(object):
     
     """ An individual Bot conversation
     """
-    
+
     default_endpoint = 'data.gov.au'
     
     def __init__(self, **kwargs):
@@ -134,23 +134,69 @@ class Bot(object):
             self.respond("Hmm, I've found a resource here but can't parse it. Moving on...")
 
     def query(self, tokens):
+        
+        #Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
+        def get_filter_terms():
+            i = len(tokens)-1
+            filter_out = []
+            while i >= 0:  
+                if tokens[i][0] == '-':
+                    clean_token = tokens[i][1:]
+                    if len(clean_token) > 0:
+                        filter_out.append(clean_token)
+                        tokens.pop(i)
+                i -= 1
+            return filter_out
+        filter_out = get_filter_terms()
+        filter_terms_length = len(filter_out)
+ 
         """ Run a query
-        """        
+        """
+
         # Run the query
         query = '+'.join(tokens)
-        data = {'q': query, 'rows': 10}
+        
+        #Jas@20/1/16 -I made rows : 100, to give the user more details abot what's being filtered with search terms.
+        data = {'q': query, 'rows': 100} 
         query_response = requests.get(
             self.endpoint + '/package_search', params=data)
         
+        #Jas@20/1/16 - Loops through filter_out and then loops through the results['result']['results'] object from CKAN. If a str(results['result']['results']) contains the - term that result is removed
+        def filter_results_by_term(results, filter_out):
+            def seek_and_remove(results, filter_this):
+                removed = 0
+                j = len(results['result']['results'])-1
+                while j >= 0:
+                    if filter_this in str(results['result']['results'][j]):
+                        del results['result']['results'][j]
+                        removed += 1
+                    j -= 1
+                return results
+        
+            if len(filter_out) > 0:
+                for filter_this in filter_out:
+                    results = seek_and_remove(results, filter_this)
+            return results['result']['results']
+
+        #Jas@20/1/16 - Some changes to this condition statement, to reflect filtered results
         # Respond with a few answers
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
+            filtered_results = filter_results_by_term(results, filter_out)
+            filtered_count = count - len(filtered_results)
             if count > 0:
                 self.respond(("I found {0} results "
-                             "for {1} at {{0.short_endpoint}}, "
-                             "here's the top result:\n").format(count, query))
-                self.send_file_info(results['result']['results'][0])
+                             "for {1} at {{0.short_endpoint}}. ").format(count, query))
+                if filter_terms_length > 0:
+                    self.respond(("From the top 100 results, I removed {0} with these terms: {1} .").format(filtered_count, filter_out))
+                    self.respond("Here's the top result from the filtered list:\n")
+                else:
+                    self.respond("Here's the top result:\n")
+                if len(filtered_results) > 0:
+                    self.send_file_info(filtered_results[0])
+                else:
+                    self.respond("nil")
                 more_link = (
                     "http://{{0.short_endpoint}}/dataset?q={0}"
                     "&sort=extras_harvest_portal+asc%2C+score+desc").format(query)
@@ -189,7 +235,6 @@ class Bot(object):
 
 
 class BotAPI(Resource):
-
     slack_data = ('token', 'team_id', 'team_domain', 'channel_id',
                   'channel_name', 'timestamp', 'user_id', 'user_name',
                   'text', 'trigger_word')

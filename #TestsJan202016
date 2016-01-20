@@ -1,0 +1,22 @@
+#Tests on Wed, Jan 20, 2016
+#Using httpie in terminal
+
+http post :5000 user_name=jess text="databot find cycling"				#normal request
+http post :5000 user_name=jess text="databot find cycling -" 			#Works, no change to normal request 
+http post :5000 user_name=jess text="databot find - cycling"			#Borks
+http post :5000 user_name=jess text="databot - find cycling"			#Not understood
+http post :5000 user_name=jess text="- databot find cycling"			#Not understood
+http post :5000 user_name=jess text="databot find cycling -Ballarat"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling -ballarat"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find -ballarat cycling"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find -Ballarat cycling"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot -Ballarat find cycling"	#Not understood
+http post :5000 user_name=jess text="databot -ballarat find cycling"	#Not understood
+http post :5000 user_name=jess text="-ballarat databot find cycling"	#Not understood
+http post :5000 user_name=jess text="-Ballarat databot find cycling"	#Not understood
+http post :5000 user_name=jess text="databot find cycling -Ballarat -Bendigo"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling -ballarat -bendigo"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling -ballarat --bendigo"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling --ballarat --bendigo"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling -Ballarat -Bendigo -Geelong"	#38 returned from CKAN, 1 removed by filter
+http post :5000 user_name=jess text="databot find cycling -Ballarat -Bendigo -Geelong -Shepparton"	#38 returned from CKAN, 1 removed by filter
