@@ -127,7 +127,6 @@ class Bot(object):
         # Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
         filter_out = {t.lstrip('-') for t in tokens if t.startswith('-')}
         tokens = {t for t in tokens if not t.startswith('-')}
-        print(filter_out, tokens)
 
         # Run the query
         query = '+'.join(tokens)
