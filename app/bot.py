@@ -1,13 +1,15 @@
-import random
-import json
+""" file:   bot.py (databot.app)
+    
+    description: Bot class to make a chatty databot
+"""
+
 import requests
-import sys
 import re
 
-from flask import current_app, url_for, abort
-from flask.ext.restful import Resource, reqparse, fields, marshal, inputs, marshal_with
+from flask import url_for, abort
+from flask.ext.restful import Resource, reqparse, fields, inputs
 
-post_fields = {
+POST_FIELDS = {
     'token': fields.String,
     'team_id': fields.String,
     'team_domain': fields.String,
@@ -24,7 +26,7 @@ post_fields = {
 def replace_slack_links(string):
     """ Strips the http requests that slack sticks in strings
     """
-    find_pattern = re.compile('(?<=\|)[.\w]*')
+    find_pattern = re.compile(r'(?<=\|)[.\w]*')
     replace_pattern = re.compile('<.*>')
 
     # Look for the match first
@@ -37,12 +39,12 @@ def replace_slack_links(string):
 
 
 class Bot(object):
-    
+
     """ An individual Bot conversation
     """
 
     default_endpoint = 'data.gov.au'
-    
+
     def __init__(self, **kwargs):
         # Copy in all data
         super(Bot, self).__init__()
@@ -66,7 +68,7 @@ class Bot(object):
             first = tokens.pop(0)
         except IndexError:
             return self.respond('Hello @{0.user_name}, how can I help?')
-            
+
         # First token should be 'find', if not, just say hello
         if first != 'find':
             return self.respond(
@@ -74,7 +76,7 @@ class Bot(object):
         else:
             self.respond('Thanks @{0.user_name}. ')
 
-        # if second last token is 'on', then we want to search on 
+        # if second last token is 'on', then we want to search on
         # a particular portal
         try:
             if tokens[-2] == 'on':
@@ -103,7 +105,7 @@ class Bot(object):
 
         # Glom everything else into a query
         return self.query(tokens)
-    
+
     def respond(self, text):
         """ Send a response back to the app
         """
@@ -134,34 +136,25 @@ class Bot(object):
             self.respond("Hmm, I've found a resource here but can't parse it. Moving on...")
 
     def query(self, tokens):
-        
-        #Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
-        def get_filter_terms():
-            i = len(tokens)-1
-            filter_out = []
-            while i >= 0:  
-                if tokens[i][0] == '-':
-                    clean_token = tokens[i][1:]
-                    if len(clean_token) > 0:
-                        filter_out.append(clean_token)
-                        tokens.pop(i)
-                i -= 1
-            return filter_out
-        filter_out = get_filter_terms()
-        filter_terms_length = len(filter_out)
- 
         """ Run a query
         """
+        # Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
+        filter_out = {t.lstrip('-') for t in tokens if t.startswith('-')}
+        tokens = {t for t in tokens if not t.startswith('-')}
+        filter_terms_length = len(filter_out)
 
         # Run the query
         query = '+'.join(tokens)
-        
-        #Jas@20/1/16 -I made rows : 100, to give the user more details abot what's being filtered with search terms.
-        data = {'q': query, 'rows': 100} 
+
+        # Jas@20/1/16 - I made rows : 100, to give the user more details abot what's being 
+        # filtered with search terms.
+        data = {'q': query, 'rows': 100}
         query_response = requests.get(
             self.endpoint + '/package_search', params=data)
         
-        #Jas@20/1/16 - Loops through filter_out and then loops through the results['result']['results'] object from CKAN. If a str(results['result']['results']) contains the - term that result is removed
+        #Jas@20/1/16 - Loops through filter_out and then loops through the 
+        # results['result']['results'] object from CKAN. If a str(results['result']['results']) 
+        # contains the - term that result is removed
         def filter_results_by_term(results, filter_out):
             def seek_and_remove(results, filter_this):
                 removed = 0
@@ -187,9 +180,10 @@ class Bot(object):
             filtered_count = count - len(filtered_results)
             if count > 0:
                 self.respond(("I found {0} results "
-                             "for {1} at {{0.short_endpoint}}. ").format(count, query))
+                              "for {1} at {{0.short_endpoint}}. ").format(count, query))
                 if filter_terms_length > 0:
-                    self.respond(("From the top 100 results, I removed {0} with these terms: {1} .").format(filtered_count, filter_out))
+                    self.respond(("From the top 100 results, I removed {0} with these"
+                                  " terms: {1} .").format(filtered_count, filter_out))
                     self.respond("Here's the top result from the filtered list:\n")
                 else:
                     self.respond("Here's the top result:\n")
@@ -219,14 +213,14 @@ class Bot(object):
         """
         changed_response = requests.get(
             self.endpoint + '/recently_changed_packages_activity_list')
-        
+
         # Respond with a few answers
         if changed_response.ok:
             results = changed_response.json()
             count = results['result']['count']
             self.respond(("I found {0} results "
-                         "which have recently changed at {{0.short_endpoint}}, "
-                         "here's the top ten:").format(count, query))
+                          "which have recently changed at {{1.short_endpoint}}, "
+                          "here's the top ten:").format(count, query))
             for result in results['result']['results']:
                 self.send_file_info(result)
         else:
@@ -242,7 +236,7 @@ class BotAPI(Resource):
     def __init__(self):
         # Validate input
         self.reqparse = reqparse.RequestParser()
-        for arg in post_fields.keys():
+        for arg in POST_FIELDS.keys():
             self.reqparse.add_argument(arg, type=str, default=None)
 
         # Initialize the resource
