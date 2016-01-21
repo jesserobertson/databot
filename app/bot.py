@@ -3,8 +3,9 @@
     description: Bot class to make a chatty databot
 """
 
+from .utilities import replace_slack_links, filter_results_by_term
+
 import requests
-import re
 
 from flask import url_for, abort
 from flask.ext.restful import Resource, reqparse, fields, inputs
@@ -21,21 +22,6 @@ POST_FIELDS = {
     'text': fields.String,
     'trigger_word': fields.String
 }
-
-
-def replace_slack_links(string):
-    """ Strips the http requests that slack sticks in strings
-    """
-    find_pattern = re.compile(r'(?<=\|)[.\w]*')
-    replace_pattern = re.compile('<.*>')
-
-    # Look for the match first
-    match = replace_pattern.search(string)
-    if match is not None:
-        subsstr = find_pattern.search(string).group(0)
-        return re.sub('<.*>', subsstr, string)
-    else:
-        return string
 
 
 class Bot(object):
@@ -141,7 +127,7 @@ class Bot(object):
         # Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
         filter_out = {t.lstrip('-') for t in tokens if t.startswith('-')}
         tokens = {t for t in tokens if not t.startswith('-')}
-        filter_terms_length = len(filter_out)
+        print(filter_out, tokens)
 
         # Run the query
         query = '+'.join(tokens)
@@ -151,44 +137,33 @@ class Bot(object):
         data = {'q': query, 'rows': 100}
         query_response = requests.get(
             self.endpoint + '/package_search', params=data)
-        
-        #Jas@20/1/16 - Loops through filter_out and then loops through the 
-        # results['result']['results'] object from CKAN. If a str(results['result']['results']) 
-        # contains the - term that result is removed
-        def filter_results_by_term(results, filter_out):
-            def seek_and_remove(results, filter_this):
-                removed = 0
-                j = len(results['result']['results'])-1
-                while j >= 0:
-                    if filter_this in str(results['result']['results'][j]):
-                        del results['result']['results'][j]
-                        removed += 1
-                    j -= 1
-                return results
-        
-            if len(filter_out) > 0:
-                for filter_this in filter_out:
-                    results = seek_and_remove(results, filter_this)
-            return results['result']['results']
 
         #Jas@20/1/16 - Some changes to this condition statement, to reflect filtered results
         # Respond with a few answers
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
-            filtered_results = filter_results_by_term(results, filter_out)
-            filtered_count = count - len(filtered_results)
+            results = results['result']['results']
+
+            # Remove filtered terms
+            if len(filter_out) > 0:
+                results, filtered_count = \
+                    filter_results_by_term(results, filter_out)
+            else:
+                filtered_count = 0
+
+            # Generate response
             if count > 0:
                 self.respond(("I found {0} results "
                               "for {1} at {{0.short_endpoint}}. ").format(count, query))
-                if filter_terms_length > 0:
+                if filtered_count > 0:
                     self.respond(("From the top 100 results, I removed {0} with these"
-                                  " terms: {1} .").format(filtered_count, filter_out))
+                                  " terms: {1}. ").format(filtered_count, ', '.join(filter_out)))
                     self.respond("Here's the top result from the filtered list:\n")
                 else:
                     self.respond("Here's the top result:\n")
-                if len(filtered_results) > 0:
-                    self.send_file_info(filtered_results[0])
+                if len(results) > 0:
+                    self.send_file_info(results[0])
                 else:
                     self.respond("nil")
                 more_link = (
@@ -218,9 +193,8 @@ class Bot(object):
         if changed_response.ok:
             results = changed_response.json()
             count = results['result']['count']
-            self.respond(("I found {0} results "
-                          "which have recently changed at {{1.short_endpoint}}, "
-                          "here's the top ten:").format(count, query))
+            self.respond(("I found {0} results which have recently changed at {{0.short_endpoint}}, "
+                          "here's the top ten:").format(count))
             for result in results['result']['results']:
                 self.send_file_info(result)
         else:
@@ -229,6 +203,10 @@ class Bot(object):
 
 
 class BotAPI(Resource):
+
+    """ Flask-RESTful API for databot
+    """
+
     slack_data = ('token', 'team_id', 'team_domain', 'channel_id',
                   'channel_name', 'timestamp', 'user_id', 'user_name',
                   'text', 'trigger_word')
