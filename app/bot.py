@@ -1,13 +1,16 @@
-import random
-import json
+""" file:   bot.py (databot.app)
+    
+    description: Bot class to make a chatty databot
+"""
+
+from .utilities import replace_slack_links, filter_results_by_term
+
 import requests
-import sys
-import re
 
-from flask import current_app, url_for, abort
-from flask.ext.restful import Resource, reqparse, fields, marshal, inputs, marshal_with
+from flask import url_for, abort
+from flask.ext.restful import Resource, reqparse, fields, inputs
 
-post_fields = {
+POST_FIELDS = {
     'token': fields.String,
     'team_id': fields.String,
     'team_domain': fields.String,
@@ -21,28 +24,13 @@ post_fields = {
 }
 
 
-def replace_slack_links(string):
-    """ Strips the http requests that slack sticks in strings
-    """
-    find_pattern = re.compile('(?<=\|)[.\w]*')
-    replace_pattern = re.compile('<.*>')
-
-    # Look for the match first
-    match = replace_pattern.search(string)
-    if match is not None:
-        subsstr = find_pattern.search(string).group(0)
-        return re.sub('<.*>', subsstr, string)
-    else:
-        return string
-
-
 class Bot(object):
-    
+
     """ An individual Bot conversation
     """
-    
+
     default_endpoint = 'data.gov.au'
-    
+
     def __init__(self, **kwargs):
         # Copy in all data
         super(Bot, self).__init__()
@@ -66,7 +54,7 @@ class Bot(object):
             first = tokens.pop(0)
         except IndexError:
             return self.respond('Hello @{0.user_name}, how can I help?')
-            
+
         # First token should be 'find', if not, just say hello
         if first != 'find':
             return self.respond(
@@ -74,7 +62,7 @@ class Bot(object):
         else:
             self.respond('Thanks @{0.user_name}. ')
 
-        # if second last token is 'on', then we want to search on 
+        # if second last token is 'on', then we want to search on
         # a particular portal
         try:
             if tokens[-2] == 'on':
@@ -103,7 +91,7 @@ class Bot(object):
 
         # Glom everything else into a query
         return self.query(tokens)
-    
+
     def respond(self, text):
         """ Send a response back to the app
         """
@@ -135,22 +123,49 @@ class Bot(object):
 
     def query(self, tokens):
         """ Run a query
-        """        
+        """
+        # Jas@20/1/16 - If a token has a - in front, it is removed and placed in filter_out
+        filter_out = {t.lstrip('-') for t in tokens if t.startswith('-')}
+        tokens = {t for t in tokens if not t.startswith('-')}
+        print(filter_out, tokens)
+
         # Run the query
         query = '+'.join(tokens)
-        data = {'q': query, 'rows': 10}
+
+        # Jas@20/1/16 - I made rows : 100, to give the user more details abot what's being 
+        # filtered with search terms.
+        data = {'q': query, 'rows': 100}
         query_response = requests.get(
             self.endpoint + '/package_search', params=data)
-        
+
+        #Jas@20/1/16 - Some changes to this condition statement, to reflect filtered results
         # Respond with a few answers
         if query_response.ok:
             results = query_response.json()
             count = results['result']['count']
+            results = results['result']['results']
+
+            # Remove filtered terms
+            if len(filter_out) > 0:
+                results, filtered_count = \
+                    filter_results_by_term(results, filter_out)
+            else:
+                filtered_count = 0
+
+            # Generate response
             if count > 0:
                 self.respond(("I found {0} results "
-                             "for {1} at {{0.short_endpoint}}, "
-                             "here's the top result:\n").format(count, query))
-                self.send_file_info(results['result']['results'][0])
+                              "for {1} at {{0.short_endpoint}}. ").format(count, query))
+                if filtered_count > 0:
+                    self.respond(("From the top 100 results, I removed {0} with these"
+                                  " terms: {1}. ").format(filtered_count, ', '.join(filter_out)))
+                    self.respond("Here's the top result from the filtered list:\n")
+                else:
+                    self.respond("Here's the top result:\n")
+                if len(results) > 0:
+                    self.send_file_info(results[0])
+                else:
+                    self.respond("nil")
                 more_link = (
                     "http://{{0.short_endpoint}}/dataset?q={0}"
                     "&sort=extras_harvest_portal+asc%2C+score+desc").format(query)
@@ -173,14 +188,13 @@ class Bot(object):
         """
         changed_response = requests.get(
             self.endpoint + '/recently_changed_packages_activity_list')
-        
+
         # Respond with a few answers
         if changed_response.ok:
             results = changed_response.json()
             count = results['result']['count']
-            self.respond(("I found {0} results "
-                         "which have recently changed at {{0.short_endpoint}}, "
-                         "here's the top ten:").format(count, query))
+            self.respond(("I found {0} results which have recently changed at {{0.short_endpoint}}, "
+                          "here's the top ten:").format(count))
             for result in results['result']['results']:
                 self.send_file_info(result)
         else:
@@ -190,6 +204,9 @@ class Bot(object):
 
 class BotAPI(Resource):
 
+    """ Flask-RESTful API for databot
+    """
+
     slack_data = ('token', 'team_id', 'team_domain', 'channel_id',
                   'channel_name', 'timestamp', 'user_id', 'user_name',
                   'text', 'trigger_word')
@@ -197,7 +214,7 @@ class BotAPI(Resource):
     def __init__(self):
         # Validate input
         self.reqparse = reqparse.RequestParser()
-        for arg in post_fields.keys():
+        for arg in POST_FIELDS.keys():
             self.reqparse.add_argument(arg, type=str, default=None)
 
         # Initialize the resource
