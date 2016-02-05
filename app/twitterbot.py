@@ -229,7 +229,7 @@ if __name__ == '__main__':
         if last_id is None:
             data = api.mentions_timeline(count=1)[0]
         else:
-            data = api.mentions_timeline(since_id=last_id, count=1)
+            data = api.mentions_timeline(since_id=last_id, count=1)[0]
         if data:
             pdb.set_trace()
             try:
