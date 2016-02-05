@@ -1,7 +1,8 @@
 """ file:   bot.py (databot.app)
-    
-    description: Bot class to make a chatty databot
 
+    description: Bot class to make a chatty databot
+    TODO:
+        - Change keys and hide them in configfile or something
 
 """
 
@@ -9,8 +10,8 @@ from utilities import filter_results_by_term
 
 import requests
 from time import sleep
-import json
 
+import re
 MAX_CHAR_LIMIT = 160
 
 consumer_key = "cjUlJQr8ukJpwSMnq5w1EQkbE"
@@ -18,37 +19,10 @@ consumer_secret = "dckLfSNywCSIecVGjW8rbLMUlLAfKjzDFwUQTrduLOiTKiGGFZ"
 access_token = "4718417858-D0UbpDi30tN0ahxPPX0EZZuBStTp2HtKGdPN5AK"
 access_token_secret = "bCvERaLZCWgLy8AmEAP6in6b1v6bLhFrYSFyMGZcA9wu0"
 
-from tweepy.streaming import StreamListener
 from tweepy import OAuthHandler
-from tweepy import Stream
+from tweepy import API
 import pdb
 # This is a basic listener that just prints received tweets to stdout.
-
-
-class StdOutListener(StreamListener):
-    def on_data(self, data):
-        print data
-        print data
-        bot = Bot(data['text'])
-        response = {
-            'status': bot.response[:MAX_CHAR_LIMIT],
-            'in_reply_to_status_id': data['id']
-        }
-        header = dict(Authorization='OAuth',
-                      oauth_consumer_key="cjUlJQr8ukJpwSMnq5w1EQkbE",
-                      oauth_nonce="10a7126927cd44cacacad6ef216d27e5",
-                      oauth_signature="6v6j1zOLdSnHrH1pSY0N7FOEGx0%3D",
-                      oauth_signature_method="HMAC-SHA1",
-                      oauth_timestamp="1454588110",
-                      oauth_token="4718417858-D0UbpDi30tN0ahxPPX0EZZuBStTp2HtKGdPN5AK",
-                      oauth_version="1.0")
-
-        requests.post(
-            "https://api.twitter.com/1.1/statuses/", headers=header, json=response)
-        return True
-
-    def on_error(self, status):
-        print status
 
 
 class Bot(object):
@@ -57,6 +31,7 @@ class Bot(object):
     """
 
     default_endpoint = 'data.gov.au'
+    purpose = re.compile(r'(what)[\w\s]+(is)[\w\s]+(purpose)', re.IGNORECASE)
 
     def __init__(self, **kwargs):
         # Copy in all data
@@ -66,8 +41,7 @@ class Bot(object):
 
         # Set up response
         self.response = {
-            'status': '',
-            'in_reply_to_status_id': ''
+            'text': '',
         }
 
         # Run chat
@@ -86,8 +60,10 @@ class Bot(object):
         if first != 'find':
             return self.respond(
                 "Sorry @{0.user_name}, I didn't understand that")
+        elif purpose.search(" ".join(tokens)):
+            self.respond("@{0.user_name} I serve butter, I mean data.")
         else:
-            self.respond('Thanks @{[user][name]}. ')
+            self.respond('Thanks @{0.user_name}. ')
 
         # if second last token is 'on', then we want to search on
         # a particular portal
@@ -233,36 +209,22 @@ class Bot(object):
 if __name__ == '__main__':
 
     # This handles Twitter authetification and the connection to Twitter
-    # Streaming API
-    header = dict(Authorization='OAuth',
-                      oauth_consumer_key="cjUlJQr8ukJpwSMnq5w1EQkbE",
-                      oauth_nonce="10a7126927cd44cacacad6ef216d27e5",
-                      oauth_signature="6v6j1zOLdSnHrH1pSY0N7FOEGx0%3D",
-                      oauth_signature_method="HMAC-SHA1",
-                      oauth_timestamp="1454588110",
-                      oauth_token="4718417858-D0UbpDi30tN0ahxPPX0EZZuBStTp2HtKGdPN5AK",
-                      oauth_version="1.0")
-    get_url = "https://api.twitter.com/1.1/statuses/mentions_timeline.json"
-    data = {'screen_name': 'databot_au',
-                'since_id': None,
-                'count': 1
-                }
-
+    auth = OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_token_secret)
+    api = API(auth)
+    # TODO keep track of last replied to response
+    #
+    last_id = None
     while True:
-        if data.get('since_id') is None:
-            del data['since_id']
-        resp = requests.get(get_url, headers=header, json=data)
-        if resp.ok:
-            print "woo"
+        if last_id is None:
+            data = api.mentions_timeline(count=1)[0]
         else:
-            pdb.set_trace()
-            sleep(10)
-            continue
-
-        sleep(10)
-
-    # l = StdOutListener()
-    # auth = OAuthHandler(consumer_key, consumer_secret)
-    # auth.set_access_token(access_token, access_token_secret)
-    # stream = Stream(auth, l)
-    # stream.userstream()
+            data = api.mentions_timeline(since_id=last_id, count=1)
+        if data:
+            bot = Bot(text=data.text, user_name=data.user.screen_name)
+            api.update_status(
+                status=bot.response['text'][:MAX_CHAR_LIMIT],
+                in_reply_to_status_id=data.id
+            )
+            last_id = data.id
+        sleep(30)
