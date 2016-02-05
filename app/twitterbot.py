@@ -21,6 +21,7 @@ access_token_secret = "bCvERaLZCWgLy8AmEAP6in6b1v6bLhFrYSFyMGZcA9wu0"
 
 from tweepy import OAuthHandler
 from tweepy import API
+from tweepy import TweepError
 import pdb
 # This is a basic listener that just prints received tweets to stdout.
 
@@ -31,10 +32,14 @@ class Bot(object):
     """
 
     default_endpoint = 'data.gov.au'
-    purpose = re.compile(r'(what)[\w\s]+(is)[\w\s]+(purpose)', re.IGNORECASE)
+    purpose = re.compile(
+        r'.*(what)[\w\s]+(is)[\w\s]+(purpose).*',
+        re.IGNORECASE
+    )
 
     def __init__(self, **kwargs):
         # Copy in all data
+        self.text = ''
         super(Bot, self).__init__()
         for arg, value in kwargs.items():
             setattr(self, arg, value)
@@ -52,16 +57,16 @@ class Bot(object):
         # Strip text of first token which is always 'databot'
         try:
             tokens = self.text.split()[1:]
-            first = tokens.pop(0)
         except IndexError:
-            return self.respond('Hello @{0.user_name}, how can I help?')
+            return self.respond('Hello @{0.user_name}, how can I ?')
 
+        if Bot.purpose.search(" ".join(tokens)):
+            return self.respond("@{0.user_name} I serve butter, I mean data.")
         # First token should be 'find', if not, just say hello
+        first = tokens.pop(0)
         if first != 'find':
             return self.respond(
                 "Sorry @{0.user_name}, I didn't understand that")
-        elif purpose.search(" ".join(tokens)):
-            self.respond("@{0.user_name} I serve butter, I mean data.")
         else:
             self.respond('Thanks @{0.user_name}. ')
 
@@ -212,7 +217,12 @@ if __name__ == '__main__':
     auth = OAuthHandler(consumer_key, consumer_secret)
     auth.set_access_token(access_token, access_token_secret)
     api = API(auth)
-    # TODO keep track of last replied to response
+    # TODO
+    # Traceback (most recent call last):
+    # File "twitterbot.py", line 237, in <module>
+    # except TweepError as e:
+    # AttributeError: 'ResultSet' object has no attribute 'text'
+
     #
     last_id = None
     while True:
@@ -221,10 +231,15 @@ if __name__ == '__main__':
         else:
             data = api.mentions_timeline(since_id=last_id, count=1)
         if data:
-            bot = Bot(text=data.text, user_name=data.user.screen_name)
-            api.update_status(
-                status=bot.response['text'][:MAX_CHAR_LIMIT],
-                in_reply_to_status_id=data.id
-            )
-            last_id = data.id
-        sleep(30)
+            pdb.set_trace()
+            try:
+                bot = Bot(text=data.text, user_name=data.user.screen_name)
+                print "Sending tweet to {}".format(data.user.screen_name)
+                api.update_status(
+                    status=bot.response['text'][:MAX_CHAR_LIMIT],
+                    in_reply_to_status_id=data.id
+                )
+                last_id = data.id
+            except TweepError as e:
+                print e.args
+        sleep(20)
