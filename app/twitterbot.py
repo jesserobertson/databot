@@ -10,9 +10,10 @@ from utilities import filter_results_by_term
 
 import requests
 from time import sleep
+import json
 
 import re
-MAX_CHAR_LIMIT = 160
+MAX_CHAR_LIMIT = 140
 
 consumer_key = "cjUlJQr8ukJpwSMnq5w1EQkbE"
 consumer_secret = "dckLfSNywCSIecVGjW8rbLMUlLAfKjzDFwUQTrduLOiTKiGGFZ"
@@ -31,7 +32,7 @@ class Bot(object):
     """ An individual Bot conversation
     """
 
-    default_endpoint = 'data.gov.au'
+    default_endpoint = 'http://data.gov.au'
     purpose = re.compile(
         r'.*(what)[\w\s]+(is)[\w\s]+(purpose).*',
         re.IGNORECASE
@@ -83,11 +84,17 @@ class Bot(object):
         except IndexError:
             self.endpoint = self.default_endpoint
 
+        redir_url = requests.get(self.endpoint)
+        if redir_url.ok:
+            self.endpoint = redir_url.url
+        else:
+            return self.respond("\nLooks like something's borked at "
+                         "{0.short_endpoint}, you're on your own!")
         # Make sure we can query the endpoint
         self.short_endpoint = self.endpoint
         if not self.endpoint.startswith('http'):
             self.endpoint = 'http://' + self.endpoint
-        self.endpoint = self.endpoint + '/api/3/action'
+        self.endpoint = self.endpoint + 'api/3/action'
 
         # If second token is 'anything', we do a random search
         if tokens[0] == 'anything':
@@ -112,7 +119,7 @@ class Bot(object):
             # Get info from result
             description = result['resources'][0]['description'].split('.')[0]
             if description in ('', None):
-                description = "There's no description for this file"
+                description = "No description for file"
             link = result['resources'][0]['url']
             fmt = result['resources'][0]['format']
             if fmt in ('', None):
@@ -124,8 +131,8 @@ class Bot(object):
                     fmt = 'a ' + fmt + ' file'
 
             # Post message
-            template = u"{1} (it's {0}). Get it <{2}|here>."
-            self.respond(template.format(fmt, description, link))
+            template = u'{0}.'
+            self.respond(template.format(link))
         except IndexError:
             self.respond(
                 "Hmm, I've found a resource here but can't parse it. Moving on...")
@@ -163,30 +170,29 @@ class Bot(object):
 
             # Generate response
             if count > 0:
-                self.respond(("I found {0} results "
-                              "for {1} at {{0.short_endpoint}}. ").format(count, query))
+                self.respond(("{0} results found.").format(count))
                 if filtered_count > 0:
                     self.respond(("From the top 100 results, I removed {0} with these"
                                   " terms: {1}. ").format(filtered_count, ', '.join(filter_out)))
                     self.respond(
-                        "Here's the top result from the filtered list:\n")
+                        "Here's the top result from the filtered list: ")
                 else:
-                    self.respond("Here's the top result:\n")
+                    self.respond("Top result: ")
                 if len(results) > 0:
                     self.send_file_info(results[0])
                 else:
                     self.respond("nil")
                 more_link = (
-                    "http://{{0.short_endpoint}}/dataset?q={0}"
+                    "{{0.short_endpoint}}/dataset?q={0}"
                     "&sort=extras_harvest_portal+asc%2C+score+desc").format(query)
                 self.respond(
-                    ("\nWant more? Check out <{0}|this link>.".format(more_link)))
+                    ('Want more? {0}.'.format(more_link)))
             else:
                 self.respond(("Sorry, I couldn't find anything"
                               " on '{0}' at {{0.short_endpoint}}.").format('+'.join(tokens)))
         else:
-            self.respond("\nLooks like something's borked at "
-                         "{0.short_endpoint}, you're on your own!")
+            self.respond("Looks like something's borked at "
+                         "{0.endpoint}, you're on your own!")
 
     def random(self):
         """ Return a random dataset
@@ -218,12 +224,9 @@ if __name__ == '__main__':
     auth.set_access_token(access_token, access_token_secret)
     api = API(auth)
     # TODO
-    # Traceback (most recent call last):
-    # File "twitterbot.py", line 237, in <module>
-    # except TweepError as e:
-    # AttributeError: 'ResultSet' object has no attribute 'text'
+    # Really need to loop through data instead of just getting
+    # first value
 
-    #
     last_id = None
     while True:
         if last_id is None:
@@ -231,9 +234,9 @@ if __name__ == '__main__':
         else:
             data = api.mentions_timeline(since_id=last_id, count=1)[0]
         if data:
-            pdb.set_trace()
             try:
                 bot = Bot(text=data.text, user_name=data.user.screen_name)
+                pdb.set_trace()
                 print "Sending tweet to {}".format(data.user.screen_name)
                 api.update_status(
                     status=bot.response['text'][:MAX_CHAR_LIMIT],
@@ -241,5 +244,6 @@ if __name__ == '__main__':
                 )
                 last_id = data.id
             except TweepError as e:
+                pdb.set_trace()
                 print e.args
         sleep(20)
