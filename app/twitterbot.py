@@ -141,10 +141,9 @@ class Bot(object):
                     fmt = 'a ' + fmt + ' file'
 
             # Post message
-            template = u'{0}. Type is {1}. '
+            template = u'{0}. '
             self.respond(template.format(
-                link,
-                fmt))
+                link))
         except IndexError:
             self.respond(
                 "Hmm, I've found a resource here"
@@ -185,7 +184,7 @@ class Bot(object):
 
             # Generate response
             if count > 0:
-                self.respond(("{0} results found.").format(count))
+                self.respond(("{0} results.").format(count))
                 if filtered_count > 0:
                     self.respond(("From the top 100 results, "
                                   "I removed {0} with these"
@@ -195,7 +194,7 @@ class Bot(object):
                     self.respond(
                         "Here's the top result from the filtered list: ")
                 else:
-                    self.respond("Top result: ")
+                    self.respond("Top link: ")
                 if len(results) > 0:
                     self.send_file_info(results[0])
                 else:
@@ -270,9 +269,6 @@ if __name__ == '__main__':
         if data:
             try:
                 bot = Bot(text=data.text, user_name=data.user.screen_name)
-                print "Sending tweet to {}".format(data.user.screen_name)
-                print "{}".format(bot.response['text'])
-                print len(bot.response['text'])
                 api.update_status(
                     status=bot.response['text'],
                     in_reply_to_status_id=data.id
