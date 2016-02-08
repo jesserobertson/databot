@@ -1,10 +1,16 @@
-""" file:   bot.py (databot.app)
+""" file:   twitterbot.py (databot.app)
 
-    description: Bot class to make a chatty databot
+    description: Bot class to make a chatty twitterbot
+    author: Jesse Robertson
+    edited by:Cameron Poole
     TODO:
         - Change keys and hide them in configfile or something
         - Sort out reply tweets.
-        - Do we use bitly or something to shorten the urls
+        - Implement some kind of code counting
+        - Send multiple tweets ??? one for result
+        - Maybe if it user replies more ? get more ???
+        - Track some of this perhaps
+        - Need to implement main method and decide on deployment
 
 
 """
