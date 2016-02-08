@@ -3,6 +3,9 @@
     description: Bot class to make a chatty databot
     TODO:
         - Change keys and hide them in configfile or something
+        - Sort out reply tweets.
+        - Do we use bitly or something to shorten the urls
+
 
 """
 
@@ -10,11 +13,17 @@ from utilities import filter_results_by_term
 
 import requests
 from time import sleep
-import json
-
+# import json
+import bitly_api
 import re
+
 MAX_CHAR_LIMIT = 140
 
+bitly_login = "o_78h31d9njm"
+bitly_key = "R_aeae9efa42d34ec596def38ccd7ead98"
+# bitly_client_id = "689e696796798a795b6721eeda7155e0cdd7ecaf"
+# bitly_secret = "99d3756705db3022f25d0bcbdff6e1086849a8b3"
+generic_token = "d2bb3e68f8c2ee1ec322a4799b4a8a094e226c2a"
 consumer_key = "cjUlJQr8ukJpwSMnq5w1EQkbE"
 consumer_secret = "dckLfSNywCSIecVGjW8rbLMUlLAfKjzDFwUQTrduLOiTKiGGFZ"
 access_token = "4718417858-D0UbpDi30tN0ahxPPX0EZZuBStTp2HtKGdPN5AK"
@@ -23,7 +32,7 @@ access_token_secret = "bCvERaLZCWgLy8AmEAP6in6b1v6bLhFrYSFyMGZcA9wu0"
 from tweepy import OAuthHandler
 from tweepy import API
 from tweepy import TweepError
-import pdb
+
 # This is a basic listener that just prints received tweets to stdout.
 
 
@@ -84,18 +93,19 @@ class Bot(object):
         except IndexError:
             self.endpoint = self.default_endpoint
 
+        # Check endpoint is valid
         redir_url = requests.get(self.endpoint)
         if redir_url.ok:
             self.endpoint = redir_url.url
         else:
             return self.respond("\nLooks like something's borked at "
-                         "{0.short_endpoint}, you're on your own!")
+                                "{0.short_endpoint}, you're on your own!")
         # Make sure we can query the endpoint
         self.short_endpoint = self.endpoint
         if not self.endpoint.startswith('http'):
             self.endpoint = 'http://' + self.endpoint
         self.endpoint = self.endpoint + 'api/3/action'
-
+        self.bit_bot = bitly_api.Connection(access_token=generic_token)
         # If second token is 'anything', we do a random search
         if tokens[0] == 'anything':
             return self.random()
@@ -119,8 +129,8 @@ class Bot(object):
             # Get info from result
             description = result['resources'][0]['description'].split('.')[0]
             if description in ('', None):
-                description = "No description for file"
-            link = result['resources'][0]['url']
+                description = "No desc for file"
+            link = self.shorten_urls(result['resources'][0]['url'])
             fmt = result['resources'][0]['format']
             if fmt in ('', None):
                 fmt = 'in an unknown format'
@@ -131,11 +141,14 @@ class Bot(object):
                     fmt = 'a ' + fmt + ' file'
 
             # Post message
-            template = u'{0}.'
-            self.respond(template.format(link))
+            template = u'{0}. Type is {1}. '
+            self.respond(template.format(
+                link,
+                fmt))
         except IndexError:
             self.respond(
-                "Hmm, I've found a resource here but can't parse it. Moving on...")
+                "Hmm, I've found a resource here"
+                " but can't parse it. Moving on...")
 
     def query(self, tokens):
         """ Run a query
@@ -148,13 +161,15 @@ class Bot(object):
         # Run the query
         query = '+'.join(tokens)
 
-        # Jas@20/1/16 - I made rows : 100, to give the user more details abot what's being
+        # Jas@20/1/16 - I made rows : 100,
+        # to give the user more details abot what's being
         # filtered with search terms.
         data = {'q': query, 'rows': 100}
         query_response = requests.get(
             self.endpoint + '/package_search', params=data)
 
-        # Jas@20/1/16 - Some changes to this condition statement, to reflect filtered results
+        # Jas@20/1/16 - Some changes to this condition statement,
+        # to reflect filtered results
         # Respond with a few answers
         if query_response.ok:
             results = query_response.json()
@@ -172,8 +187,11 @@ class Bot(object):
             if count > 0:
                 self.respond(("{0} results found.").format(count))
                 if filtered_count > 0:
-                    self.respond(("From the top 100 results, I removed {0} with these"
-                                  " terms: {1}. ").format(filtered_count, ', '.join(filter_out)))
+                    self.respond(("From the top 100 results, "
+                                  "I removed {0} with these"
+                                  " terms: {1}. ").format(
+                        filtered_count,
+                        ', '.join(filter_out)))
                     self.respond(
                         "Here's the top result from the filtered list: ")
                 else:
@@ -183,13 +201,17 @@ class Bot(object):
                 else:
                     self.respond("nil")
                 more_link = (
-                    "{{0.short_endpoint}}/dataset?q={0}"
-                    "&sort=extras_harvest_portal+asc%2C+score+desc").format(query)
+                    "{0.short_endpoint}dataset?q={1}"
+                    "&sort=extras_harvest_portal+asc,+score+desc").format(
+                    self,
+                    query)
+                short_more = self.shorten_urls(more_link)
                 self.respond(
-                    ('Want more? {0}.'.format(more_link)))
+                    ('Want more? {0}.'.format(short_more)))
             else:
                 self.respond(("Sorry, I couldn't find anything"
-                              " on '{0}' at {{0.short_endpoint}}.").format('+'.join(tokens)))
+                              " on '{0}' at {{0.short_endpoint}}.").format(
+                    '+'.join(tokens)))
         else:
             self.respond("Looks like something's borked at "
                          "{0.endpoint}, you're on your own!")
@@ -200,7 +222,8 @@ class Bot(object):
         self.respond("I can't let you do that @{0.user_name}.")
 
     def changed(self):
-        """ Return the datasets which have changed recently
+        """
+        Return the datasets which have changed recently
         """
         changed_response = requests.get(
             self.endpoint + '/recently_changed_packages_activity_list')
@@ -209,13 +232,24 @@ class Bot(object):
         if changed_response.ok:
             results = changed_response.json()
             count = results['result']['count']
-            self.respond(("I found {0} results which have recently changed at {{0.short_endpoint}}, "
+            self.respond(("I found {0} results which have recently changed "
+                          "at {{0.short_endpoint}}, "
                           "here's the top ten:").format(count))
             for result in results['result']['results']:
                 self.send_file_info(result)
         else:
             self.respond("Looks like something's borked at "
                          "{0.short_endpoint}, you're on your own!")
+
+    def shorten_urls(self, url):
+        "Returns a shortend url using the bitly api"
+        try:
+            return self.bit_bot.shorten(url)['url']
+        except bitly_api.BitlyError as e:
+            print e
+            self.respond("Whoops looks like a failed at "
+                         "getting a shortend link. Blame Bill. {0}".format(
+                             url))
 
 if __name__ == '__main__':
 
@@ -236,14 +270,14 @@ if __name__ == '__main__':
         if data:
             try:
                 bot = Bot(text=data.text, user_name=data.user.screen_name)
-                pdb.set_trace()
                 print "Sending tweet to {}".format(data.user.screen_name)
+                print "{}".format(bot.response['text'])
+                print len(bot.response['text'])
                 api.update_status(
-                    status=bot.response['text'][:MAX_CHAR_LIMIT],
+                    status=bot.response['text'],
                     in_reply_to_status_id=data.id
                 )
                 last_id = data.id
             except TweepError as e:
-                pdb.set_trace()
                 print e.args
         sleep(20)
