@@ -10,7 +10,7 @@ Searches an arbitrary CKAN instance from slack for data. You just ask `databot f
 
 You can specify any CKAN endpoint with v3 of the CKAN API using on, so `databot search cycling on data.gov.uk` will search the data.gov.uk CKAN instance for cycling. Our default is `data.gov.au` because Australia needs to be first in *something* after [our terrible Ashes performance this year](http://www.abc.net.au/news/2015-08-07/michael-clarke-rues-one-of-his-toughest-days/6679346?section=sport).
 
-A search omit function has been added. Use - to not show results with a certain word. 
+A search omit function has been added. Use - to not show results without a certain word. 
 
 For example ```databot find cycling -ballarat``` will return the results, not including those that contain ```ballarat```.
 
