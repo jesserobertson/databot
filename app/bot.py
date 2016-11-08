@@ -167,7 +167,7 @@ class Bot(object):
                     self.respond("nil")
                 more_link = (
                     "http://{{0.short_endpoint}}/dataset?q={0}"
-                    "&sort=extras_harvest_portal+asc%2C+score+desc").format('+'.join(tokens))
+                    "&sort=extras_harvest_portal+asc%2C+score+desc").format('%2B'.join(tokens))
                 self.respond(
                     ("\nWant more? Check out <{0}|this link>.".format(more_link)))
             else:
